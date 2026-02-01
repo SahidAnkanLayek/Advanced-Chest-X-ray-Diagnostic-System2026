@@ -1,0 +1,8 @@
+{
+  "name": "CheXNet-AI: Advanced Chest X-ray Diagnostic System",
+  "description": "A high-fidelity medical AI platform using DenseNet-121 for automated chest X-ray analysis, Grad-CAM visualization, and automated clinical report generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
