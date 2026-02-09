@@ -1,6 +1,5 @@
-
-fastapi
-uvicorn
+fastapi>=0.100
+uvicorn>=0.22
 torch
 torchvision
 numpy
