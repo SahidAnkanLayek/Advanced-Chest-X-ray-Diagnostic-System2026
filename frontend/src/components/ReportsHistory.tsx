@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, FileText, Download, X, Calendar as CalendarIcon, ChevronDown, Trash2 } from 'lucide-react';
+import { Search, Filter, FileText, Download, X, ChevronDown, Trash2 } from 'lucide-react';
 import { CLASS_NAMES, AnalysisResult } from '../types';
 import { getHistory, downloadReport } from '../services/api';
 
@@ -14,6 +13,13 @@ const ReportsHistory: React.FC = () => {
     setHistory(getHistory());
   }, []);
 
+  // Helper function to extract the highest probability finding from the dictionary
+  const getTopFinding = (probabilities: Record<string, number> | undefined): [string, number] => {
+    if (!probabilities || Object.keys(probabilities).length === 0) return ['Unknown', 0];
+    return (Object.entries(probabilities) as [string, number][])
+      .sort((a, b) => b[1] - a[1])[0];
+  };
+
   const filteredReports = useMemo(() => {
     return history.filter((report) => {
       const matchesSearch = 
@@ -21,17 +27,13 @@ const ReportsHistory: React.FC = () => {
         report.reportId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (report.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const topPred = [...report.predictions].sort((a,b) => b.probability - a.probability)[0];
-      const matchesDiagnosis = diagnosisFilter === 'All' || topPred.label === diagnosisFilter;
+      // Use the helper to get the top label for filtering
+      const [topLabel] = getTopFinding(report.probabilities);
+      const matchesDiagnosis = diagnosisFilter === 'All' || topLabel === diagnosisFilter;
 
       return matchesSearch && matchesDiagnosis;
     });
   }, [searchTerm, diagnosisFilter, history]);
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setDiagnosisFilter('All');
-  };
 
   const clearHistory = () => {
     if (confirm("Permanently clear all analysis history?")) {
@@ -41,7 +43,8 @@ const ReportsHistory: React.FC = () => {
   };
 
   const handleDownload = (rep: AnalysisResult) => {
-    downloadReport(rep, rep.heatmapUrl, rep.patient);
+    // We now just pass the base64 string directly!
+    downloadReport(rep.pdf_base64, rep.pdf_filename || `Report_${rep.reportId}.pdf`);
   };
 
   return (
@@ -115,7 +118,9 @@ const ReportsHistory: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredReports.map((rep) => {
-                  const top = [...rep.predictions].sort((a,b) => b.probability - a.probability)[0];
+                  // Get the top label and probability using our helper
+                  const [topLabel, topProb] = getTopFinding(rep.probabilities);
+                  
                   return (
                     <tr key={rep.reportId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
                       <td className="px-6 py-4">
@@ -125,10 +130,10 @@ const ReportsHistory: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-slate-400 dark:text-slate-500 font-mono text-xs">{rep.reportId}</td>
-                      <td className="px-6 py-4 capitalize text-slate-700 dark:text-slate-300">{top.label.replace('_', ' ')}</td>
+                      <td className="px-6 py-4 capitalize text-slate-700 dark:text-slate-300">{topLabel.replace('_', ' ')}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${top.probability > 0.5 ? 'bg-red-500/10 text-red-600 dark:text-red-500' : 'bg-blue-500/10 text-blue-600 dark:text-blue-500'}`}>
-                          {(top.probability * 100).toFixed(0)}%
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${topProb > 0.5 ? 'bg-red-500/10 text-red-600 dark:text-red-500' : 'bg-blue-500/10 text-blue-600 dark:text-blue-500'}`}>
+                          {(topProb * 100).toFixed(0)}%
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">

@@ -173,22 +173,19 @@ import {
   Activity
 } from 'lucide-react';
 import { getHistory } from '../services/api';
-
-interface Prediction {
-  label: string;
-  probability: number;
-}
-
-interface Report {
-  reportId: string;
-  fileName: string;
-  predictions: Prediction[];
-}
+import { AnalysisResult } from '../types';
 
 const Dashboard: React.FC = () => {
-  const [history, setHistory] = useState<Report[]>([]);
+  // 1. Use the AnalysisResult type directly from types.ts
+  const [history, setHistory] = useState<AnalysisResult[]>([]);
 
-  // ✅ Load history SAFELY using useEffect
+  // 2. Helper to extract the highest probability disease
+  const getTopFinding = (probabilities: Record<string, number> | undefined): [string, number] => {
+    if (!probabilities || Object.keys(probabilities).length === 0) return ['Unknown', 0];
+    return (Object.entries(probabilities) as [string, number][])
+      .sort((a, b) => b[1] - a[1])[0];
+  };
+
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -203,23 +200,18 @@ const Dashboard: React.FC = () => {
     loadHistory();
   }, []);
 
-  // ✅ Compute stats only after data is available
   const stats = useMemo(() => {
     const totalScans = history.length;
     let criticalFinds = 0;
     const distribution: Record<string, number> = {};
 
     history.forEach((report) => {
-      if (!report.predictions || report.predictions.length === 0) return;
+      // 3. Use the helper instead of the old array sorting
+      const [topLabel, topProb] = getTopFinding(report.probabilities);
 
-      const topPred = [...report.predictions].sort(
-        (a, b) => b.probability - a.probability
-      )[0];
-
-      if (topPred && topPred.probability > 0.5) {
+      if (topLabel !== 'Unknown' && topProb > 0.5) {
         criticalFinds++;
-        distribution[topPred.label] =
-          (distribution[topPred.label] || 0) + 1;
+        distribution[topLabel] = (distribution[topLabel] || 0) + 1;
       }
     });
 
@@ -234,7 +226,6 @@ const Dashboard: React.FC = () => {
     return { totalScans, criticalFinds, chartData };
   }, [history]);
 
-  // ✅ Empty state (NO crash)
   if (history.length === 0) {
     return (
       <div className="max-w-6xl mx-auto h-[60vh] flex flex-col items-center justify-center text-center space-y-4">
@@ -312,7 +303,7 @@ const Dashboard: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" fontSize={10} tickLine={false} />
                   <YAxis fontSize={10} tickLine={false} />
-                  <Tooltip />
+                  <Tooltip cursor={{fill: 'transparent'}} />
                   <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -330,23 +321,24 @@ const Dashboard: React.FC = () => {
           </h2>
           <div className="space-y-4">
             {history.slice(0, 5).map((rep) => {
-              if (!rep.predictions?.length) return null;
-
-              const top = [...rep.predictions].sort(
-                (a, b) => b.probability - a.probability
-              )[0];
+              // 4. Update the recent alerts loop to use the dictionary helper
+              const [topLabel, topProb] = getTopFinding(rep.probabilities);
+              
+              if (topLabel === 'Unknown') return null;
 
               return (
                 <div
                   key={rep.reportId}
-                  className="p-3 border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-800/50 rounded-r-lg"
+                  className="p-3 border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-800/50 rounded-r-lg flex flex-col gap-1"
                 >
                   <p className="text-sm font-medium text-slate-900 dark:text-white">
                     {rep.fileName}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {top.label.replace('_', ' ')} (
-                    {(top.probability * 100).toFixed(0)}%)
+                  <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 capitalize">
+                    {topLabel.replace('_', ' ')} ({(topProb * 100).toFixed(0)}%)
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-1">
+                    ID: {rep.reportId}
                   </p>
                 </div>
               );
